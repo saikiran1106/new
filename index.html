@@ -1,0 +1,447 @@
+import React, { useRef, useState } from "react";
+import { useEffect } from "react";
+import {
+    Platform,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+    ScrollView,
+    TextInput,
+    KeyboardAvoidingView
+} from "react-native";
+import { useSelector, useDispatch } from "react-redux";
+import Animated, { FadeInDown, FadeInUp, FadeOutDown, LinearTransition, SequencedTransition, SlideInDown, SlideInUp, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import FastImage from "react-native-fast-image";
+
+
+interface RankingProps {
+    item: any;
+    handleSelect?: any
+    data?: any;
+    clearAll: (id: any) => void; // Required prop
+}
+
+const Ranking = React.memo(({ item, handleSelect, data, clearAll }: RankingProps) => {
+    const qId = item?._id;
+    const [option, setOption] = useState<any>([])
+    const ismultiple = false;
+    const [selectedItems, setSelectedItems] = useState<any>([]);
+    const videoStatus = useSelector((state: any) => state.home.videoStatuses[qId]);
+    const [errorMessage, setErrorMessage] = useState(false);
+    const [none, setNone] = useState(false);
+    const isvideoplayed = item?.newQuestionType !== 'video' || (item?.newQuestionType === 'video' && videoStatus);
+    const [isEnabled, setEnabled] = useState<any>(null);
+    const rotationValues = data.map(() => useSharedValue(0));
+    const animatedStyles = rotationValues.map((rotation) =>
+        useAnimatedStyle(() => ({
+            transform: [{ rotate: `${rotation.value}deg` }],
+        }))
+    );
+
+    const handlePress = (index: number, val: any, ismultiple: boolean, optItem: any) => {
+
+        console.log("val", val);
+
+        console.log("options", option);
+
+        if (option.some((opt: any) => opt.answer === val[0])) {
+            console.log("Value is already selected in options, stopping execution");
+            return;
+        }
+
+
+        if (!isvideoplayed) {
+            setErrorMessage(true);
+            return
+        } else {
+            setErrorMessage(false)
+        }
+
+
+        rotationValues.forEach((rotation, i) => {
+            if (i !== index) {
+                rotation.value = withTiming(0);
+            }
+        });
+
+
+        rotationValues[index].value = rotationValues[index].value === 180 ? withTiming(0) : withTiming(180);
+
+        if (optItem?.deselectAll) { ///if none option is selected 
+            // setOption([]);
+            setSelectedItems([]);
+            clearAll(qId);
+            setNone(true);
+        }
+
+        if (none) { /// if anyother option is selected remove none option
+            clearAll(qId);
+            setNone(optItem?.deselectAll ? true : false);
+            // !(item?.explain) && handleSelect(qId, data[index].option, false);
+        }
+
+        if (optItem?.explain && !ismultiple) {
+            clearAll(qId);
+        }
+
+        let newSelection = optItem?.deselectAll ? [] : none ? [] : [...selectedItems];
+
+        if (ismultiple && (!optItem?.deselectAll && !none)) {
+            if (selectedItems.includes(index)) {
+                if (selectedItems.length > 1) {
+                    newSelection = newSelection.filter((item) => item !== index);
+                } else {
+                    newSelection = []
+                }
+            } else {
+                newSelection.push(index);
+            }
+        } else {
+            if (selectedItems.includes(index)) {
+                newSelection = [index];
+            } else {
+                newSelection = [index];
+            }
+        }
+        // if (isEnabled) {
+        //     setEnabled(null);
+        // } else {
+        //     setEnabled({ optionId: index, enabled: true });
+        //     setSelectedItems(newSelection);
+        // }
+        setEnabled(prev => (prev && prev.optionId === index) ? null : { optionId: index, enabled: true });
+        setSelectedItems(newSelection);
+    };
+
+
+    const handleRank = (index: number, val: any, optItem: any, optItemIndex: number, rank: any) => {
+
+
+        if (option.some((rankItem: any) => rankItem.rank === val && rankItem.optionId !== optItemIndex)) {
+            console.log("Ranking value already assigned to another option, returning early");
+            return;
+        }
+        console.log("rank data12", { index, val, optItem, optItemIndex, rank });
+
+        rotationValues[optItemIndex].value = withTiming(0);
+        const ranking_object = {
+            rankId: index,
+            option: optItem.option,
+            questionId: qId,
+            rank: val,
+            ismultiple: ismultiple,
+            answer: optItem.option,
+            optionId: optItemIndex,
+            emoji: rank?.emoji || null,
+            type: rank.type
+        }
+        const other_rankings = option.filter((rank: any) => {
+            return rank.optionId !== optItemIndex
+        })
+        const all_options = [...other_rankings, ranking_object]
+
+
+        console.log("all_options", all_options);
+
+        setOption(all_options);
+        setEnabled(null);
+        if (all_options.length == data.length) {
+            handleSelect(all_options, qId)
+        }
+        // else {
+        //     handleSelect([],qId)
+        // }
+    }
+
+
+    const removeRank = (optItemIndex: number) => {
+
+        console.log("optItemIndex", animatedStyles);
+
+
+        const other_rankings = option.filter((rank: any) => {
+            return rank.optionId !== optItemIndex
+        })
+        setOption([...other_rankings]);
+        setEnabled(null);
+        handleSelect([], qId)
+    }
+
+    const handleClose = () => {
+        setEnabled(null);
+    }
+
+    return (
+        <TouchableOpacity
+            // onPress={handleClose}
+            style={styles.SurveyOptionListv1}
+            activeOpacity={1}>
+            {(errorMessage && !isvideoplayed) ? (
+                <Text style={[styles.errorText]}>Please watch the full video before answering.</Text>
+            ) : null}
+
+            {data.map((optItem: any, index: any) => {
+                const isSelected = selectedItems.includes(index);
+                const selected = option.filter((rankItem: any) => rankItem.optionId == index);
+                const isRanked = selected.length > 0 ? selected[0] : null;
+                return (
+                    <View
+                        key={index + 10 + index}
+                        style={{}}>
+                        <TouchableOpacity
+                            style={[{
+                                flexDirection: "row",
+                                borderWidth: 1,
+                                borderColor: "#E3E3E3",
+                                alignItems: 'center',
+                                backgroundColor: '#fff'
+                            }, styles.button]}
+                            activeOpacity={1}
+                            onPress={() => handlePress(index, [optItem.option], ismultiple, optItem)}>
+                            <View
+                                style={{
+                                    zIndex: -1,
+                                    flex: 1
+                                }}>
+                                <Text
+                                    style={[
+                                        styles.text,
+                                        {
+                                            color:
+                                                "#323232",
+                                            fontFamily: "Urbanist-Regular",
+                                        },
+                                    ]}
+                                >
+                                    {optItem?.option}
+                                </Text>
+                            </View>
+                            {!isRanked &&
+                                <TouchableOpacity
+                                    style={{
+                                        padding: 12,
+                                        backgroundColor: '#FFF2F1',
+                                        borderRadius: 8,
+                                    }}
+                                    hitSlop={{
+                                        top: 50,
+                                        left: 50,
+                                        right: 50,
+                                        bottom: 50
+                                    }}
+                                    onPress={() => handlePress(index, [optItem.option], ismultiple, optItem)}
+                                    activeOpacity={1}
+                                >
+                                    <Animated.View style={animatedStyles[index]}>
+                                        <FastImage
+                                            source={require('./../../../assets/webp/dropdown.webp')}
+                                            style={{ width: 13, height: 13 }}
+                                            resizeMode="contain"
+                                        />
+                                    </Animated.View>
+                                </TouchableOpacity>
+                            }
+                            {isRanked &&
+                                <TouchableOpacity
+                                    style={{
+                                        padding: 9,
+                                        backgroundColor: '#FFF2F1',
+                                        marginRight: 10,
+                                        borderRadius: 8,
+                                    }}
+                                    hitSlop={{
+                                        top: 50,
+                                        left: 50,
+                                        right: 50,
+                                        bottom: 50
+                                    }}
+                                    onPress={() => {
+                                        removeRank(index)
+                                    }}
+                                    activeOpacity={1}
+                                >
+                                    <FastImage
+                                        source={require('./../../../assets/webp/red_close_icon.webp')}
+                                        style={{
+                                            width: 7,
+                                            height: 7,
+                                        }}
+                                        resizeMode="contain"
+                                    />
+                                </TouchableOpacity>
+                            }
+                            {isRanked &&
+                                <View
+                                    style={{
+                                        backgroundColor: '#FAF8FF',
+                                        borderWidth: 0.9,
+                                        borderColor: '#E3DCF2',
+                                        paddingHorizontal: 14,
+                                        paddingVertical: 8.5,
+                                        borderRadius: 9,
+                                        height: 36
+                                    }}
+                                >
+                                    {isRanked.type == "emoji_rating" ?
+                                        <FastImage
+                                            source={{ uri: isRanked.emoji }}
+                                            style={{
+                                                width: 24,
+                                                height: 24,
+                                            }}
+                                            resizeMode="contain"
+                                        />
+                                        :
+                                        <Text
+                                            style={{
+                                                color: "#414141",
+                                                fontFamily: "Urbanist-Bold",
+                                                fontSize: 16,
+                                                lineHeight: 19.2,
+                                                textAlign: 'center',
+                                            }}
+                                        >{isRanked.rank}</Text>
+                                    }
+                                </View>
+                            }
+
+                        </TouchableOpacity>
+                        {(isSelected) && isEnabled && (isEnabled.optionId == index) && optItem.ranking && (optItem?.ranking || []).length > 0 &&
+                            <Animated.View
+                                style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    // position: "absolute",
+                                    zIndex: -1,
+                                    // marginTop: 4,
+                                    backgroundColor: '#fff',
+                                    shadowColor: '#181818',
+                                    shadowOffset: { width: 0, height: 4 },
+                                    shadowOpacity: 0.12,
+                                    elevation: 6,
+                                    width: "100%",
+                                    // top: 48,
+                                    paddingTop: 16,
+                                    paddingBottom: 35,
+                                    borderRadius: 10,
+                                    borderTopRightRadius: 0,
+                                    borderTopLeftRadius: 0,
+                                    marginTop: -25,
+                                    marginBottom: 10,
+
+                                }}
+                                entering={FadeInUp}
+                            >
+                                {(isSelected) && optItem.ranking && (optItem?.ranking || []).length > 0 &&
+                                    optItem.ranking.map((rank: any, rankIndex: number) => {
+                                        const selected = option.filter((rankItem: any) => rankItem.rankId == rankIndex);
+                                        const prevSelected = option.map((rankItem: any) => rankItem.rankId);
+                                        const isPrevRanked = prevSelected.includes(rankIndex)
+                                        const isLastOption = index === data.length - 1;
+                                        return (
+                                            <TouchableOpacity
+                                                key={rankIndex + 100 + rankIndex}
+                                                style={{
+                                                    marginLeft: 16,
+                                                    paddingHorizontal: 12,
+                                                    backgroundColor: '#F6F6F6',
+                                                    borderRadius: 14,
+                                                    paddingVertical: 6,
+                                                    marginRight: 0,
+
+
+
+                                                }}
+                                                activeOpacity={1}
+                                                onPress={() => {
+                                                    handleRank(rankIndex, rank.option, optItem, index, rank)
+                                                }}
+                                                hitSlop={{
+                                                    top: 10,
+                                                    left: 10,
+                                                    right: 10,
+                                                    bottom: 10
+                                                }}
+                                                disabled={isPrevRanked}
+                                            >
+                                                {rank.type == "emoji_rating" ?
+                                                    <FastImage
+                                                        source={{ uri: rank.emoji }}
+                                                        style={{
+                                                            width: 24,
+                                                            height: 24,
+                                                            opacity: isPrevRanked ? 0.5 : 1,
+                                                        }}
+                                                        resizeMode="contain"
+                                                    />
+                                                    :
+                                                    <Text
+                                                        style={{
+                                                            fontFamily: "Urbanist-SemiBold",
+                                                            color: isPrevRanked ? '#D8D8D8' : "#414141",
+                                                            fontSize: 16,
+                                                            lineHeight: 19.2
+                                                        }}
+                                                    >{rank.option}</Text>
+                                                }
+                                            </TouchableOpacity>
+                                        )
+                                    })
+                                }
+
+                            </Animated.View>
+                        }
+
+                    </View>
+                );
+            })}
+            <View style={{
+                height: 100
+            }} />
+        </TouchableOpacity>
+    )
+})
+
+export default Ranking
+
+const styles = StyleSheet.create({
+    button: {
+        borderRadius: 10,
+        paddingVertical: 13,
+        paddingHorizontal: 16,
+        marginBottom: 16,
+        shadowRadius: 1,
+        shadowOffset: {
+            width: 0,
+            height: 0,
+        },
+    },
+
+    text: {
+        color: "#323232",
+        fontFamily: "Urbanist-Regular",
+        fontSize: 18,
+    },
+    SurveyOptionListv1: { paddingRight: 40, paddingLeft: 6, flex: 1 },
+    errorText: {
+        color: "red",
+        fontFamily: "Urbanist-Medium",
+        fontSize: 12,
+        paddingLeft: 0,
+        marginBottom: 12,
+    },
+    descInput: {
+        fontSize: 14,
+        lineHeight: 19.6,
+        backgroundColor: "transparent",
+        color: "#262626",
+        flexDirection: "row",
+        fontWeight: "normal",
+        fontFamily: "Urbanist-Regular",
+        paddingTop: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: '#9f9f9f',
+        marginBottom: 6
+    },
+});
